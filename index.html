@@ -8,6 +8,7 @@
 <script src="//cdn.leafletjs.com/leaflet-0.7.3/leaflet.js"></script>
 <script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.js"></script>
 <script src="//cdn.rawgit.com/mlevans/leaflet-hash/master/leaflet-hash.js"></script>
+<script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
 <style>
 body {
 	width: 100%;
@@ -36,6 +37,10 @@ body {
 	font-size: 12pt;
 	font-weight: bold;
 	font-family: Meiryo, sans-serif;
+}
+
+#footer * {
+	margin: auto 0.5em;
 }
 
 #footer code {
@@ -72,71 +77,79 @@ body {
 			}
 		};
 
+		var polylineHandler = {
+			"mouseover" : function() {
+				console.log(this);
+				this.setStyle(styles.on);
+				var a = this.properties;
+				var b = $("#footer");
+				b.empty().append($("<span/>").text(a.knj));
+				if (a.kana && a.kana.length > 0)
+					b.append($("<small/>").text(a.kana));
+				b.append($("<code/>").text(a.rID));
+			},
+			"mouseout" : function() {
+				this.setStyle(styles.off);
+			}
+		};
+
+		var promises = [];
+		var tileLayerHandler = {
+			"loading" : function(a) {
+				promises = [];
+			},
+			"tileloadstart" : function(a) {
+				var b = a.url.replace("ort", "experimental_anno").replace(".jpg", ".geojson");
+				promises.push($.getJSON(b));
+			},
+			"load" : function(a) {
+				$.when.apply(null, promises).done(onDone);
+			}
+		};
+
 		var points = [];
-		var bg = L.tileLayer('http://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg');
 
-		var timer = [];
-		var poly = [];
-
-		bg.on("tileload", function(a) {
-			var b = a.url.replace("ort", "experimental_anno").replace(".jpg", ".geojson");
-			d3.json(b, function(error, json) {
-				json.features.forEach(function(c) {
-					if (c.properties.annoCtg == "居住地名（町字名）")
-						points.push({
-							properties : c.properties,
-							x : c.geometry.coordinates[1],
-							y : c.geometry.coordinates[0]
-						});
+		var onDone = function() {
+			$.each(arguments, function(i, v) {
+				if (!v[0] || !v[0].features)
+					return;
+				$.each(v[0].features, function(j, w) {
+					if (w.properties.annoCtg != "居住地名（町字名）")
+						return;
+					points.push([ w.geometry.coordinates[1], w.geometry.coordinates[0], w.properties ]);
 				});
 			});
 
-			timer.forEach(clearTimeout);
-			timer = [ setTimeout(function() {
-				while (poly.length > 0)
-					map.removeLayer(poly.pop());
-				noi(points).forEach(function(p) {
-					poly.push(L.polyline(p, styles.shadow).addTo(map));
-				});
-				noi(points).forEach(function(p) {
-					var x = L.polyline(p, styles.off);
-					x.addTo(map);
-					x.properties = p.point.properties;
-					poly.push(x);
-					x.on("mouseover", function() {
-						this.setStyle(styles.on);
-						var a = this.properties;
-						var b = a.knj;
-						if (a.kana && a.kana.length > 0)
-							b += " <small>" + a.kana + "</small> ";
-						b += " <code>" + a.rID + "</code> ";
-						document.getElementById("footer").innerHTML = b;
-					}).on("mouseout", function() {
-						this.setStyle(styles.off);
-					});
-				});
-			}, 500) ];
-		});
+			fg.clearLayers();
+			var z = d3.geom.voronoi(points);
+			$.each(z, function(i, v) {
+				fg.addLayer(L.polyline(v, styles.shadow));
+			});
+			$.each(z, function(i, v) {
+				var x = L.polyline(v, styles.off);
+				x.properties = v.point[2];
+				x.on(polylineHandler, x);
+				fg.addLayer(x);
+			});
+		};
 
-		var opt = L.Hash.parseHash(location.hash) || {
+		var bg = L.tileLayer('http://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg', {
+			attribution : "<a href='http://maps.gsi.go.jp/development/'>地理院タイル・オルソ画像(国土地理院)</a>"
+		}).on(tileLayerHandler);
+
+		var fg = L.layerGroup([]);
+
+		var map = L.map("map", L.extend({
+			minZoom : 15,
+			maxZoom : 18,
+			layers : [ bg, fg ]
+		}, L.Hash.parseHash(location.hash) || {
 			zoom : 15,
 			center : [ 35.6439, 139.663116 ]
-		};
-		opt.minZoom = 15;
-		opt.maxZoom = 18;
-		opt.layers = [ bg ];
-
-		var map = L.map("map", opt);
-		map.attributionControl.addAttribution([ "<a href='http://maps.gsi.go.jp/development/'>地理院タイル・オルソ画像(国土地理院)</a>",
-				"<a href='https://github.com/gsi-cyberjapan/experimental_anno'>国土地理院ベクトルタイル提供実験（地図情報（注記））</a>" ]
-				.join(" "));
+		}));
+		map.attributionControl.addAttribution("<a href='https://github.com/gsi-cyberjapan/experimental_anno'>"
+				+ "国土地理院ベクトルタイル提供実験（地図情報（注記））</a>");
 		new L.Hash(map);
-
-		var noi = d3.geom.voronoi().x(function(d) {
-			return d.x;
-		}).y(function(d) {
-			return d.y;
-		});
 	</script>
 </body>
 </html>
