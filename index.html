@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>gsi-anno-voronoi</title>
+<meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0" />
+<link rel="stylesheet" href="//cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
+<script src="//cdn.leafletjs.com/leaflet-0.7.3/leaflet.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.js"></script>
+<script src="//cdn.rawgit.com/mlevans/leaflet-hash/master/leaflet-hash.js"></script>
+<style>
+body {
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+
+#map {
+	position: absolute;
+	top: 0;
+	left: 0;
+	bottom: 20px;
+	width: 100%;
+	height: auto;
+}
+
+#footer {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+	height: 20px;
+	text-align: center;
+	background: black;
+	color: white;
+	font-size: 12pt;
+	font-weight: bold;
+	font-family: Meiryo, sans-serif;
+}
+
+#footer code {
+	font-family: Consolas, monospace;
+}
+</style>
+</head>
+<body>
+	<div id="map"></div>
+	<footer id="footer"></footer>
+	<script>
+		var styles = {
+			shadow : {
+				color : "#000",
+				opacity : 1.0,
+				fill : false,
+				weight : 5
+			},
+			on : {
+				color : "#f80",
+				opacity : 1.0,
+				fill : true,
+				fillColor : "#000",
+				fillOpacity : 0.4,
+				weight : 3
+			},
+			off : {
+				color : "#f80",
+				opacity : 1.0,
+				fill : true,
+				fillColor : "#000",
+				fillOpacity : 0.1,
+				weight : 3
+			}
+		};
+
+		var points = [];
+		var bg = L.tileLayer('http://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg');
+
+		var timer = [];
+		var poly = [];
+
+		bg.on("tileload", function(a) {
+			var b = a.url.replace("ort", "experimental_anno").replace(".jpg", ".geojson");
+			d3.json(b, function(error, json) {
+				json.features.forEach(function(c) {
+					if (c.properties.annoCtg == "居住地名（町字名）")
+						points.push({
+							properties : c.properties,
+							x : c.geometry.coordinates[1],
+							y : c.geometry.coordinates[0]
+						});
+				});
+			});
+
+			timer.forEach(clearTimeout);
+			timer = [ setTimeout(function() {
+				while (poly.length > 0)
+					map.removeLayer(poly.pop());
+				noi(points).forEach(function(p) {
+					poly.push(L.polyline(p, styles.shadow).addTo(map));
+				});
+				noi(points).forEach(function(p) {
+					var x = L.polyline(p, styles.off);
+					x.addTo(map);
+					x.properties = p.point.properties;
+					poly.push(x);
+					x.on("mouseover", function() {
+						this.setStyle(styles.on);
+						var a = this.properties;
+						var b = a.knj;
+						if (a.kana && a.kana.length > 0)
+							b += " <small>" + a.kana + "</small> ";
+						b += " <code>" + a.rID + "</code> ";
+						document.getElementById("footer").innerHTML = b;
+					}).on("mouseout", function() {
+						this.setStyle(styles.off);
+					});
+				});
+			}, 500) ];
+		});
+
+		var opt = L.Hash.parseHash(location.hash) || {
+			zoom : 15,
+			center : [ 35.6439, 139.663116 ]
+		};
+		opt.minZoom = 15;
+		opt.maxZoom = 18;
+		opt.layers = [ bg ];
+
+		var map = L.map("map", opt);
+		map.attributionControl.addAttribution([ "<a href='http://maps.gsi.go.jp/development/'>地理院タイル・オルソ画像(国土地理院)</a>",
+				"<a href='https://github.com/gsi-cyberjapan/experimental_anno'>国土地理院ベクトルタイル提供実験（地図情報（注記））</a>" ]
+				.join(" "));
+		new L.Hash(map);
+
+		var noi = d3.geom.voronoi().x(function(d) {
+			return d.x;
+		}).y(function(d) {
+			return d.y;
+		});
+	</script>
+</body>
+</html>
