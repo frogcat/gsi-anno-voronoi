@@ -122,9 +122,13 @@ body {
 			fg.clearLayers();
 			var z = d3.geom.voronoi(points);
 			$.each(z, function(i, v) {
+				if (!v)
+					return;
 				fg.addLayer(L.polyline(v, styles.shadow));
 			});
 			$.each(z, function(i, v) {
+				if (!v)
+					return;
 				var x = L.polyline(v, styles.off);
 				x.properties = v.point[2];
 				x.on(polylineHandler, x);
