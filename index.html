@@ -1,158 +1,127 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<meta charset="utf-8">
-<title>gsi-anno-voronoi</title>
-<meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0" />
-<link rel="stylesheet" href="//cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
-<script src="//cdn.leafletjs.com/leaflet-0.7.3/leaflet.js"></script>
-<script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.js"></script>
-<script src="//cdn.rawgit.com/mlevans/leaflet-hash/master/leaflet-hash.js"></script>
-<script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
-<style>
-body {
-	width: 100%;
-	height: 100%;
-	overflow: hidden;
-}
+	<meta charset="utf-8">
+	<title>gsi-anno-voronoi</title>
+	<meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0" />
 
-#map {
-	position: absolute;
-	top: 0;
-	left: 0;
-	bottom: 20px;
-	width: 100%;
-	height: auto;
-}
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css" />
+	<script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js"></script>
+	<script src="https://unpkg.com/leaflet-hash@0.2.1/leaflet-hash.js"></script>
+	<script src="https://unpkg.com/d3-delaunay@4.1.5/dist/d3-delaunay.min.js"></script>
+	<style>
+		.leaflet-overlay-pane {
+			filter: drop-shadow(2px 2px 0px #000);
+		}
 
-#footer {
-	position: absolute;
-	bottom: 0;
-	left: 0;
-	width: 100%;
-	height: 20px;
-	text-align: center;
-	background: black;
-	color: white;
-	font-size: 12pt;
-	font-weight: bold;
-	font-family: Meiryo, sans-serif;
-}
+		.cell:hover {
+			fill-opacity: 0.4;
+		}
 
-#footer * {
-	margin: auto 0.5em;
-}
+		.my-div-icon {
+			width: auto !important;
+			pointer-events: none;
 
-#footer code {
-	font-family: Consolas, monospace;
-}
-</style>
+		}
+
+		.my-div-icon>div {
+			white-space: nowrap;
+			font-size: 10pt;
+			color: white;
+			width: auto !important;
+			margin-left: -50%;
+			text-shadow: 2px 2px 0px #000;
+		}
+	</style>
 </head>
+
 <body>
-	<div id="map"></div>
-	<footer id="footer"></footer>
+	<div id="map" style="position:absolute;top:0;left:0;right:0;bottom:0;"></div>
 	<script>
-		var styles = {
-			shadow : {
-				color : "#000",
-				opacity : 1.0,
-				fill : false,
-				weight : 5
-			},
-			on : {
-				color : "#f80",
-				opacity : 1.0,
-				fill : true,
-				fillColor : "#000",
-				fillOpacity : 0.4,
-				weight : 3
-			},
-			off : {
-				color : "#f80",
-				opacity : 1.0,
-				fill : true,
-				fillColor : "#000",
-				fillOpacity : 0.1,
-				weight : 3
-			}
-		};
-
-		var polylineHandler = {
-			"mouseover" : function() {
-				this.setStyle(styles.on);
-				var a = this.properties;
-				var b = $("#footer");
-				b.empty().append($("<span/>").text(a.knj));
-				if (a.kana && a.kana.length > 0)
-					b.append($("<small/>").text(a.kana));
-				b.append($("<code/>").text(a.rID));
-			},
-			"mouseout" : function() {
-				this.setStyle(styles.off);
-			}
-		};
-
-		var promises = [];
-		var tileLayerHandler = {
-			"loading" : function(a) {
-				promises = [];
-			},
-			"tileloadstart" : function(a) {
-				var b = a.url.replace("ort", "experimental_anno").replace(".jpg", ".geojson");
-				promises.push($.getJSON(b));
-			},
-			"load" : function(a) {
-				$.when.apply(null, promises).done(onDone);
-			}
-		};
-
-		var points = [];
-
-		var onDone = function() {
-			$.each(arguments, function(i, v) {
-				if (!v[0] || !v[0].features)
-					return;
-				$.each(v[0].features, function(j, w) {
-					if (w.properties.annoCtg != "居住地名（町字名）")
-						return;
-					points.push([ w.geometry.coordinates[1], w.geometry.coordinates[0], w.properties ]);
-				});
-			});
-
-			fg.clearLayers();
-			var z = d3.geom.voronoi(points);
-			$.each(z, function(i, v) {
-				if (!v)
-					return;
-				fg.addLayer(L.polyline(v, styles.shadow));
-			});
-			$.each(z, function(i, v) {
-				if (!v)
-					return;
-				var x = L.polyline(v, styles.off);
-				x.properties = v.point[2];
-				x.on(polylineHandler, x);
-				fg.addLayer(x);
-			});
-		};
-
-		var bg = L.tileLayer('http://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg', {
-			attribution : "<a href='http://maps.gsi.go.jp/development/'>地理院タイル・オルソ画像(国土地理院)</a>"
-		}).on(tileLayerHandler);
-
-		var fg = L.layerGroup([]);
-
 		var map = L.map("map", L.extend({
-			minZoom : 15,
-			maxZoom : 18,
-			layers : [ bg, fg ]
-		}, L.Hash.parseHash(location.hash) || {
-			zoom : 15,
-			center : [ 35.6439, 139.663116 ]
-		}));
-		map.attributionControl.addAttribution("<a href='https://github.com/gsi-cyberjapan/experimental_anno'>"
-				+ "国土地理院ベクトルタイル提供実験（地図情報（注記））</a>");
+			maxZoom: 18,
+			zoom: 15,
+			center: [35.6439, 139.663116]
+		}, L.Hash.parseHash(location.hash))).on("zoomend", function() {
+			if (map.getZoom() < 15) group.clearLayers();
+		});
+
+		L.tileLayer('http://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg', {
+			attribution: "<a href='http://maps.gsi.go.jp/development/ichiran.html'>地理院タイル</a>",
+		}).addTo(map);
+
+		map.zoomControl.setPosition("bottomright");
+
+		var group = L.layerGroup([]).addTo(map);
+
+		var painter = {
+			frames: [],
+			update: function() {
+				while (this.frames.length > 0) L.Util.cancelAnimFrame(this.frames.pop());
+				this.frames.push(L.Util.requestAnimFrame(this.paint, this));
+			},
+			paint: function() {
+				group.clearLayers();
+				var box = map.getBounds();
+				var features = [];
+				Object.keys(src._tiles)
+					.map(key => src._tiles[key])
+					.filter(a => a.current && a.el.geojson)
+					.forEach(a => {
+						var b = a.el.geojson.features.filter(c => {
+							return c.properties.annoCtg.indexOf("居住地名") !== -1;
+						});
+						features = features.concat(b);
+					});
+				var points = features.map(g => {
+					var p = L.GeoJSON.coordsToLatLng(g.geometry.coordinates);
+					box.extend(p);
+					return [p.lat, p.lng];
+				});
+
+				var voronoi = d3.Delaunay.from(points).voronoi([box.getSouth(), box.getWest(), box.getNorth(), box.getEast()]);
+				features.forEach((f, i) => {
+					var polygon = voronoi.cellPolygon(i);
+					var a = f.properties;
+
+					L.marker(L.GeoJSON.coordsToLatLng(f.geometry.coordinates), {
+						icon: L.divIcon({
+							className: 'my-div-icon',
+							html: "<div>" + a.knj + "</div>"
+						})
+					}).addTo(group);
+					if (!polygon) return;
+					L.polygon(polygon, {
+						color: "#f80",
+						opacity: 1.0,
+						fill: true,
+						fillColor: "#000",
+						fillOpacity: 0.1,
+						weight: 3,
+						className: "cell"
+					}).addTo(group);
+				});
+			}
+		};
+
+		var src = L.tileLayer(L.Util.emptyImageUrl, {
+			attribution: "<a href='http://maps.gsi.go.jp/development/ichiran.html'>地理院タイル</a>",
+			minZoom: 15,
+			maxZoom: 20,
+			maxNativeZoom: 15
+		}).on("tileloadstart", function(event) {
+			var url = "https://cyberjapandata.gsi.go.jp/xyz/experimental_anno/{z}/{x}/{y}.geojson";
+			fetch(L.Util.template(url, event.coords)).then(a => a.ok ? a.json() : null).then(geojson => {
+				if (geojson) {
+					event.tile.geojson = geojson;
+					painter.update();
+				}
+			});
+		}).addTo(map);
+
 		new L.Hash(map);
 	</script>
 </body>
+
 </html>
